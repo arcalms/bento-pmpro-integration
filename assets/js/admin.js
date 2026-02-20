@@ -271,6 +271,29 @@ jQuery( function ( $ ) {
 		} );
 	}
 
+	// -------------------------------------------------------------------------
+	// Test connection button
+	// -------------------------------------------------------------------------
+	$( '#bento-test-event' ).on( 'click', function () {
+		var $btn    = $( this );
+		var $status = $( '#bento-test-event-status' );
+
+		$btn.prop( 'disabled', true );
+		$status.text( 'Sending…' );
+
+		$.post(
+			bentoPmpro.ajaxUrl,
+			{ action: 'bento_pmpro_test_event', _ajax_nonce: bentoPmpro.testNonce },
+			function ( response ) {
+				$status.text( response.success ? response.data : 'Error: ' + ( response.data || 'unknown' ) );
+			}
+		).fail( function () {
+			$status.text( 'Request failed — please try again.' );
+		} ).always( function () {
+			$btn.prop( 'disabled', false );
+		} );
+	} );
+
 	$( '#bento-sync-pmpro' ).on( 'click', function () {
 		runSync( 'pmpro', $( this ), $( '#bento-sync-pmpro-status' ), $( '#bento-sync-pmpro-filter' ).val() );
 	} );

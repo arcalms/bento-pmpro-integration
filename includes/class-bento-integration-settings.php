@@ -36,6 +36,7 @@ class Bento_Integration_Settings {
 		add_action( 'wp_ajax_bento_pmpro_condition_values', [ __CLASS__, 'ajax_condition_values' ] );
 		add_action( 'wp_ajax_bento_pmpro_start_sync',       [ __CLASS__, 'ajax_start_sync' ] );
 		add_action( 'wp_ajax_bento_pmpro_sync_status',      [ __CLASS__, 'ajax_sync_status' ] );
+		add_action( 'wp_ajax_bento_pmpro_test_event',       [ __CLASS__, 'ajax_test_event' ] );
 		// Action Scheduler hooks — run in background, not via AJAX.
 		add_action( 'bento_pmpro_as_sync',  [ __CLASS__, 'run_scheduled_batch' ], 10, 1 );
 		add_action( 'bento_pmpro_as_event', [ __CLASS__, 'run_queued_event' ],    10, 1 );
@@ -213,6 +214,7 @@ class Bento_Integration_Settings {
 			'nonce'      => wp_create_nonce( 'bento_pmpro_fetch_fields' ),
 			'condNonce'  => wp_create_nonce( 'bento_pmpro_condition_values' ),
 			'syncNonce'  => wp_create_nonce( 'bento_pmpro_sync_batch' ),
+			'testNonce'  => wp_create_nonce( 'bento_pmpro_test_event' ),
 			'syncStatus' => get_option( 'bento_pmpro_sync_status', [] ),
 		] );
 	}
@@ -442,6 +444,44 @@ class Bento_Integration_Settings {
 		}
 
 		return compact( 'event_name', 'custom_fields' );
+	}
+
+	// -------------------------------------------------------------------------
+	// AJAX: send a test event to verify the Bento connection
+	// -------------------------------------------------------------------------
+
+	/**
+	 * AJAX handler: fire a $BentoTest event for the current admin user directly
+	 * (synchronous, not via AS) so the admin gets instant feedback on whether
+	 * the Bento SDK and credentials are working.
+	 */
+	public static function ajax_test_event(): void {
+		check_ajax_referer( 'bento_pmpro_test_event' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'Unauthorized', 403 );
+			return;
+		}
+
+		if ( ! class_exists( 'Bento_Events_Controller' ) ) {
+			wp_send_json_error( 'Bento SDK is not active.' );
+			return;
+		}
+
+		$user = wp_get_current_user();
+
+		try {
+			Bento_Events_Controller::trigger_event(
+				$user->ID,
+				'$BentoTest',
+				$user->user_email,
+				[ 'source' => 'bento-pmpro-integration' ],
+				[]
+			);
+			wp_send_json_success( 'Test event sent to ' . $user->user_email . '. Check your Bento dashboard.' );
+		} catch ( \Throwable $e ) {
+			wp_send_json_error( 'Failed: ' . $e->getMessage() );
+		}
 	}
 
 	// -------------------------------------------------------------------------
@@ -992,6 +1032,15 @@ class Bento_Integration_Settings {
 
 				<?php submit_button( 'Save Settings' ); ?>
 			</form>
+
+			<hr style="margin:32px 0;">
+
+			<h2>Test Connection</h2>
+			<p>Send a <code>$BentoTest</code> event for your admin account to confirm the Bento SDK and API credentials are working.</p>
+			<p>
+				<button id="bento-test-event" class="button button-secondary">Send test event</button>
+				<span id="bento-test-event-status" style="margin-left:12px;"></span>
+			</p>
 
 			<hr style="margin:32px 0;">
 
