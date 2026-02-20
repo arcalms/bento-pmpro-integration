@@ -26,7 +26,16 @@ function bento_pmpro_load() {
 	require_once BENTO_PMPRO_PLUGIN_DIR . 'includes/class-bento-sensei-events.php';
 
 	Bento_Integration_Settings::init();
-	Bento_PMPro_Events::init();
-	Bento_Sensei_Events::init();
+
+	// Only register PMPro hooks when PMPro is active; avoids fatal errors if
+	// PMPro is deactivated while this plugin remains active.
+	if ( function_exists( 'pmpro_getLevel' ) ) {
+		Bento_PMPro_Events::init();
+	}
+
+	// Only register Sensei hooks when Sensei LMS is active.
+	if ( class_exists( 'Sensei_Main' ) ) {
+		Bento_Sensei_Events::init();
+	}
 }
 add_action( 'plugins_loaded', 'bento_pmpro_load', 20 );

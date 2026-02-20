@@ -665,11 +665,15 @@ class Bento_Integration_Settings {
 	private static function sync_pmpro_batch( int $offset, int $batch = 25, int $filter_level_id = 0 ): array {
 		global $wpdb;
 
+		if ( ! function_exists( 'pmpro_getLevel' ) ) {
+			return [ 'total' => 0, 'offset' => 0, 'done' => true, 'errors' => 0, 'error' => 'PMPro is not active.' ];
+		}
+
 		$table = $wpdb->prefix . 'pmpro_memberships_users';
 
 		// Check the table exists (i.e. PMPro is installed).
 		if ( $wpdb->get_var( "SHOW TABLES LIKE '{$table}'" ) !== $table ) {
-			return [ 'total' => 0, 'offset' => 0, 'done' => true, 'error' => 'PMPro is not installed.' ];
+			return [ 'total' => 0, 'offset' => 0, 'done' => true, 'errors' => 0, 'error' => 'PMPro is not installed.' ];
 		}
 
 		$filter_sql = $filter_level_id > 0
@@ -745,6 +749,10 @@ class Bento_Integration_Settings {
 	 */
 	private static function sync_sensei_batch( int $offset, int $batch = 25, int $filter_course_id = 0 ): array {
 		global $wpdb;
+
+		if ( ! class_exists( 'Sensei_Main' ) ) {
+			return [ 'total' => 0, 'offset' => 0, 'done' => true, 'errors' => 0, 'error' => 'Sensei LMS is not active.' ];
+		}
 
 		$filter_sql = $filter_course_id > 0
 			? $wpdb->prepare( ' AND comment_post_ID = %d', $filter_course_id )
