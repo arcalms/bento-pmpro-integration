@@ -11,6 +11,24 @@
 defined( 'ABSPATH' ) || exit;
 
 define( 'BENTO_PMPRO_VERSION', '1.2.0' );
+
+/**
+ * Abort activation with a clear message if the Bento WordPress SDK is not active.
+ * At activation time all other active plugins are already loaded, so the class
+ * check is reliable.
+ */
+register_activation_hook( __FILE__, function (): void {
+	if ( ! class_exists( 'Bento_Events_Controller' ) ) {
+		deactivate_plugins( plugin_basename( __FILE__ ) );
+		wp_die(
+			'<p><strong>Bento + PMPro Integration</strong> requires the '
+			. '<strong>Bento WordPress SDK</strong> plugin to be installed and active. '
+			. 'Please activate the Bento SDK first, then activate this plugin.</p>',
+			'Plugin Activation Error',
+			[ 'back_link' => true ]
+		);
+	}
+} );
 define( 'BENTO_PMPRO_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'BENTO_PMPRO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
