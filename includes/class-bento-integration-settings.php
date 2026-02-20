@@ -31,6 +31,7 @@ class Bento_Integration_Settings {
 		add_action( 'admin_menu', [ __CLASS__, 'add_settings_page' ] );
 		add_action( 'admin_init', [ __CLASS__, 'register_settings' ] );
 		add_action( 'admin_enqueue_scripts', [ __CLASS__, 'enqueue_assets' ] );
+		add_action( 'admin_notices', [ __CLASS__, 'maybe_show_notice' ] );
 		add_action( 'wp_ajax_bento_pmpro_fetch_fields',     [ __CLASS__, 'ajax_fetch_fields' ] );
 		add_action( 'wp_ajax_bento_pmpro_condition_values', [ __CLASS__, 'ajax_condition_values' ] );
 		add_action( 'wp_ajax_bento_pmpro_start_sync',       [ __CLASS__, 'ajax_start_sync' ] );
@@ -38,6 +39,38 @@ class Bento_Integration_Settings {
 		// Action Scheduler hooks — run in background, not via AJAX.
 		add_action( 'bento_pmpro_as_sync',  [ __CLASS__, 'run_scheduled_batch' ], 10, 1 );
 		add_action( 'bento_pmpro_as_event', [ __CLASS__, 'run_queued_event' ],    10, 1 );
+	}
+
+	// -------------------------------------------------------------------------
+	// Admin notice
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Show an error notice if the Bento SDK is not active, or a warning if
+	 * the API credentials have not been configured yet.
+	 */
+	public static function maybe_show_notice(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( ! class_exists( 'Bento_Events_Controller' ) ) {
+			echo '<div class="notice notice-error"><p>'
+				. '<strong>Bento + PMPro Integration:</strong> '
+				. 'The Bento WordPress SDK plugin is not active. Events cannot be sent until it is installed and activated.'
+				. '</p></div>';
+			return;
+		}
+
+		$bento = get_option( 'bento_settings', [] );
+		if ( empty( $bento['bento_site_key'] ) || empty( $bento['bento_publishable_key'] ) || empty( $bento['bento_secret_key'] ) ) {
+			$settings_url = admin_url( 'options-general.php?page=bento' );
+			echo '<div class="notice notice-warning"><p>'
+				. '<strong>Bento + PMPro Integration:</strong> '
+				. 'Bento API credentials are not configured. '
+				. '<a href="' . esc_url( $settings_url ) . '">Visit the Bento settings page</a> to add your site key and API keys.'
+				. '</p></div>';
+		}
 	}
 
 	// -------------------------------------------------------------------------
