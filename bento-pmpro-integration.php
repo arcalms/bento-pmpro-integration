@@ -19,6 +19,8 @@ define( 'BENTO_PMPRO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
  * are all available.
  */
 function bento_pmpro_load() {
+	load_plugin_textdomain( 'bento-pmpro', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
+
 	require_once BENTO_PMPRO_PLUGIN_DIR . 'includes/class-bento-integration-settings.php';
 	require_once BENTO_PMPRO_PLUGIN_DIR . 'includes/class-bento-pmpro-events.php';
 	require_once BENTO_PMPRO_PLUGIN_DIR . 'includes/class-bento-sensei-events.php';
