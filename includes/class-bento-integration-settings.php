@@ -376,6 +376,21 @@ class Bento_Integration_Settings {
 	}
 
 	// -------------------------------------------------------------------------
+	// Shared helpers: enabled check + field resolution for event handler classes
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Return whether a given event is enabled in settings.
+	 *
+	 * @param string $event_key One of the keys in get_event_definitions().
+	 */
+	public static function is_event_enabled( string $event_key ): bool {
+		$all   = get_option( self::OPTION_KEY, [] );
+		$saved = $all[ $event_key ] ?? [];
+		return ! empty( $saved['enabled'] );
+	}
+
+	// -------------------------------------------------------------------------
 	// Shared helper: resolve field mappings for any event key
 	// -------------------------------------------------------------------------
 

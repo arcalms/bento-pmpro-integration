@@ -36,83 +36,21 @@ class Bento_Sensei_Events {
 	}
 
 	// -------------------------------------------------------------------------
-	// Internal helpers
+	// Internal helper
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Return merged event config with defaults applied.
+	 * Dispatch a Bento event if the event is enabled.
 	 *
-	 * @param string $event_key Settings key for the event.
-	 * @return array{enabled: bool, event_name: string, custom_fields: array}
-	 */
-	private static function get_event_config( string $event_key ): array {
-		$all      = get_option( 'bento_pmpro_integration_settings', [] );
-		$saved    = $all[ $event_key ] ?? [];
-		$defaults = Bento_Integration_Settings::get_event_definitions();
-
-		return [
-			'enabled'       => ! empty( $saved['enabled'] ),
-			'event_name'    => $saved['event_name'] ?? ( $defaults[ $event_key ]['default_event'] ?? $event_key ),
-			'custom_fields' => $saved['custom_fields'] ?? [],
-		];
-	}
-
-	/**
-	 * Resolve admin-configured custom-field mappings to concrete values.
-	 *
-	 * Three source types are supported:
-	 *   - 'user_meta'  – looks up a WP user meta key for the given user.
-	 *   - 'static'     – uses the literal source_value string.
-	 *   - 'event_data' – reads a value from the event's own $details payload
-	 *                    (e.g. 'course_title', 'grade').
-	 *
-	 * @param array $mappings Array of ['key', 'source_type', 'source_value'] rows.
-	 * @param int   $user_id  The WordPress user ID.
-	 * @param array $details  The event detail payload for 'event_data' lookups.
-	 * @return array<string, mixed>
-	 */
-	private static function resolve_custom_fields( array $mappings, int $user_id, array $details = [] ): array {
-		$resolved = [];
-		foreach ( $mappings as $mapping ) {
-			$key = sanitize_key( $mapping['key'] ?? '' );
-			if ( '' === $key ) {
-				continue;
-			}
-
-			// Evaluate optional condition before doing anything else.
-			$condition_key   = $mapping['condition_key']   ?? '';
-			$condition_value = $mapping['condition_value'] ?? '';
-			if ( '' !== $condition_key ) {
-				$actual = (string) ( $details[ $condition_key ] ?? '' );
-				if ( $actual !== $condition_value ) {
-					continue; // Condition not met — skip this mapping.
-				}
-			}
-
-			$source_type  = $mapping['source_type'] ?? 'static';
-			$source_value = $mapping['source_value'] ?? '';
-
-			if ( 'user_meta' === $source_type ) {
-				$resolved[ $key ] = get_user_meta( $user_id, sanitize_key( $source_value ), true );
-			} elseif ( 'event_data' === $source_type ) {
-				$resolved[ $key ] = $details[ $source_value ] ?? '';
-			} else {
-				$resolved[ $key ] = sanitize_text_field( $source_value );
-			}
-		}
-		return $resolved;
-	}
-
-	/**
-	 * Dispatch a Bento event if enabled and Bento is available.
+	 * Delegates enabled-check and field resolution to Bento_Integration_Settings
+	 * so the logic lives in one place.
 	 *
 	 * @param string $event_key Settings key for the event.
 	 * @param int    $user_id   WordPress user ID.
 	 * @param array  $details   Event-specific detail payload.
 	 */
 	private static function fire_event( string $event_key, int $user_id, array $details ): void {
-		$config = self::get_event_config( $event_key );
-		if ( ! $config['enabled'] ) {
+		if ( ! Bento_Integration_Settings::is_event_enabled( $event_key ) ) {
 			return;
 		}
 
@@ -121,14 +59,14 @@ class Bento_Sensei_Events {
 			return;
 		}
 
-		$custom_fields = self::resolve_custom_fields( $config['custom_fields'], $user_id, $details );
+		$resolved = Bento_Integration_Settings::resolve_event_fields( $event_key, $user_id, $details );
 
 		Bento_Integration_Settings::queue_event(
 			$user_id,
-			$config['event_name'],
+			$resolved['event_name'],
 			$user->user_email,
 			$details,
-			$custom_fields
+			$resolved['custom_fields']
 		);
 	}
 
