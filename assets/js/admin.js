@@ -121,16 +121,23 @@ jQuery( function ( $ ) {
 	} );
 
 	// -------------------------------------------------------------------------
-	// Build the condition-key <select> HTML for a new row
+	// Build the condition-key <select> element for a new row
 	// -------------------------------------------------------------------------
 	function buildConditionSelect( name, eventKeys ) {
-		var html = '<select class="bento-condition-key" name="' + name + '">';
-		html += '<option value="">— always —</option>';
+		var $select = $( '<select>' )
+			.addClass( 'bento-condition-key' )
+			.attr( 'name', name );
+
+		$( '<option>' ).val( '' ).text( '— always —' ).appendTo( $select );
+
 		$.each( eventKeys, function ( i, k ) {
-			html += '<option value="' + k + '">' + k + '</option>';
+			// Use .text() so event-key values are always safely escaped.
+			$( '<option>' ).val( k ).text( k ).appendTo( $select );
 		} );
-		html += '</select>';
-		return html;
+
+		// Wrap in a throwaway container to get the outer HTML as a string,
+		// which is what the row-building code expects.
+		return $( '<div>' ).append( $select ).html();
 	}
 
 	// -------------------------------------------------------------------------
