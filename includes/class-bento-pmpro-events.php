@@ -25,6 +25,27 @@ class Bento_PMPro_Events {
 	private static array $old_levels_cache = [];
 
 	/**
+	 * Level-change events pending dispatch.
+	 * Populated by on_level_changed(); flushed at shutdown so we can suppress
+	 * the event when a checkout fires in the same request (checkout sends its
+	 * own event and the level-change is redundant).
+	 *
+	 * @var list<array>
+	 */
+	private static array $pending_level_changes = [];
+
+	/**
+	 * User IDs that completed a checkout during this request.
+	 * Used by flush_pending_level_changes() to skip duplicates.
+	 *
+	 * @var array<int, true>
+	 */
+	private static array $checkout_user_ids = [];
+
+	/** Whether the shutdown flush action has already been registered. */
+	private static bool $shutdown_registered = false;
+
+	/**
 	 * Register all PMPro action hooks.
 	 */
 	public static function init(): void {
@@ -176,6 +197,10 @@ class Bento_PMPro_Events {
 	 * @param object $order   MemberOrder object.
 	 */
 	public static function on_checkout( int $user_id, object $order ): void {
+		// Mark this user so flush_pending_level_changes() skips the companion
+		// pmpro_after_change_membership_level that PMPro fires during checkout.
+		self::$checkout_user_ids[ $user_id ] = true;
+
 		$level      = pmpro_getLevel( $order->membership_id ?? 0 );
 		$level_name = $level->name ?? '';
 
@@ -207,11 +232,37 @@ class Bento_PMPro_Events {
 		$old_levels      = self::$old_levels_cache[ $user_id ] ?? [];
 		$old_level_names = implode( ', ', array_map( fn( $l ) => $l->name ?? '', $old_levels ) );
 
-		self::fire_event( 'pmpro_level_changed', $user_id, [
+		// Resolve all data now while context is accurate, but defer the actual
+		// queue call to shutdown. PMPro fires this hook before pmpro_after_checkout,
+		// so we can only know at shutdown whether a checkout also happened.
+		self::$pending_level_changes[] = [
+			'user_id'         => $user_id,
 			'level_id'        => $level_id,
 			'new_level_name'  => $new_level_name,
 			'old_level_names' => $old_level_names,
-		] );
+		];
+
+		if ( ! self::$shutdown_registered ) {
+			add_action( 'shutdown', [ __CLASS__, 'flush_pending_level_changes' ] );
+			self::$shutdown_registered = true;
+		}
+	}
+
+	/**
+	 * Shutdown callback: queue deferred level-changed events, skipping any user
+	 * who already received a checkout event during this request.
+	 */
+	public static function flush_pending_level_changes(): void {
+		foreach ( self::$pending_level_changes as $change ) {
+			if ( isset( self::$checkout_user_ids[ $change['user_id'] ] ) ) {
+				continue; // on_checkout() already queued an event for this user.
+			}
+			self::fire_event( 'pmpro_level_changed', $change['user_id'], [
+				'level_id'        => $change['level_id'],
+				'new_level_name'  => $change['new_level_name'],
+				'old_level_names' => $change['old_level_names'],
+			] );
+		}
 	}
 
 	/**
