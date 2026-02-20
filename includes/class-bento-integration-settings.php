@@ -577,16 +577,21 @@ class Bento_Integration_Settings {
 			? self::sync_sensei_batch( $offset, 25, $filter_id )
 			: self::sync_pmpro_batch( $offset, 25, $filter_id );
 
-		// Persist progress.
-		$all          = get_option( self::SYNC_STATUS_OPTION, [] );
+		// Persist progress, accumulating error counts across batches.
+		$all           = get_option( self::SYNC_STATUS_OPTION, [] );
+		$prev_errors   = (int) ( $all[ $type ]['errors'] ?? 0 );
+		$total_errors  = $prev_errors + (int) ( $result['errors'] ?? 0 );
+		$error_suffix  = $total_errors > 0 ? ' (' . $total_errors . ' failed — check error log)' : '';
+
 		$all[ $type ] = [
 			'status'    => $result['done'] ? 'done' : 'running',
 			'total'     => $result['total'],
 			'offset'    => $result['offset'],
 			'filter_id' => $filter_id,
+			'errors'    => $total_errors,
 			'message'   => $result['done']
-				? '✓ Done — synced ' . $result['total'] . ' records.'
-				: 'Synced ' . $result['offset'] . ' of ' . $result['total'] . '…',
+				? '✓ Done — synced ' . $result['total'] . ' records' . $error_suffix . '.'
+				: 'Synced ' . $result['offset'] . ' of ' . $result['total'] . '…' . $error_suffix,
 		];
 		update_option( self::SYNC_STATUS_OPTION, $all );
 
@@ -684,6 +689,8 @@ class Bento_Integration_Settings {
 			$batch, $offset
 		) );
 
+		$errors = 0;
+
 		foreach ( $rows as $row ) {
 			$user_id = (int) $row->user_id;
 			$user    = get_userdata( $user_id );
@@ -705,13 +712,18 @@ class Bento_Integration_Settings {
 			$resolved = self::resolve_event_fields( 'pmpro_checkout', $user_id, $details );
 
 			if ( ! empty( $resolved['event_name'] ) ) {
-				Bento_Events_Controller::trigger_event(
-					$user_id,
-					$resolved['event_name'],
-					$user->user_email,
-					$details,
-					$resolved['custom_fields']
-				);
+				try {
+					Bento_Events_Controller::trigger_event(
+						$user_id,
+						$resolved['event_name'],
+						$user->user_email,
+						$details,
+						$resolved['custom_fields']
+					);
+				} catch ( \Throwable $e ) {
+					$errors++;
+					error_log( 'Bento PMPro Sync: failed for user ' . $user_id . ' — ' . $e->getMessage() );
+				}
 				// Brief pause between API calls to avoid hitting Bento rate limits.
 				usleep( 250000 ); // 250ms
 			}
@@ -723,6 +735,7 @@ class Bento_Integration_Settings {
 			'total'  => $total,
 			'offset' => $new_offset,
 			'done'   => $new_offset >= $total,
+			'errors' => $errors,
 		];
 	}
 
@@ -749,7 +762,7 @@ class Bento_Integration_Settings {
 		);
 
 		if ( 0 === $total ) {
-			return [ 'total' => 0, 'offset' => 0, 'done' => true ];
+			return [ 'total' => 0, 'offset' => 0, 'done' => true, 'errors' => 0 ];
 		}
 
 		$rows = $wpdb->get_results( $wpdb->prepare(
@@ -761,6 +774,8 @@ class Bento_Integration_Settings {
 			 LIMIT %d OFFSET %d",
 			$batch, $offset
 		) );
+
+		$errors = 0;
 
 		foreach ( $rows as $row ) {
 			$user_id   = (int) $row->user_id;
@@ -777,13 +792,18 @@ class Bento_Integration_Settings {
 			$resolved = self::resolve_event_fields( 'sensei_course_enrolled', $user_id, $details );
 
 			if ( ! empty( $resolved['event_name'] ) ) {
-				Bento_Events_Controller::trigger_event(
-					$user_id,
-					$resolved['event_name'],
-					$user->user_email,
-					$details,
-					$resolved['custom_fields']
-				);
+				try {
+					Bento_Events_Controller::trigger_event(
+						$user_id,
+						$resolved['event_name'],
+						$user->user_email,
+						$details,
+						$resolved['custom_fields']
+					);
+				} catch ( \Throwable $e ) {
+					$errors++;
+					error_log( 'Bento Sensei Sync: failed for user ' . $user_id . ', course ' . $course_id . ' — ' . $e->getMessage() );
+				}
 				// Brief pause between API calls to avoid hitting Bento rate limits.
 				usleep( 250000 ); // 250ms
 			}
@@ -795,6 +815,7 @@ class Bento_Integration_Settings {
 			'total'  => $total,
 			'offset' => $new_offset,
 			'done'   => $new_offset >= $total,
+			'errors' => $errors,
 		];
 	}
 
