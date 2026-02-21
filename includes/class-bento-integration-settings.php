@@ -266,8 +266,14 @@ class Bento_Integration_Settings {
 			return;
 		}
 
+		/** This filter is documented in includes/class-bento-integration-settings.php */
+		$fields_endpoint = apply_filters(
+			'bento_pmpro_fields_endpoint',
+			'https://app.bentonow.com/api/v1/fetch/fields'
+		);
+
 		$response = wp_remote_get(
-			'https://app.bentonow.com/api/v1/fetch/fields?site_uuid=' . urlencode( $site ),
+			$fields_endpoint . '?site_uuid=' . urlencode( $site ),
 			[
 				'headers' => [
 					'Accept'        => 'application/json',

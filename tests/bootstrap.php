@@ -121,6 +121,13 @@ if ( ! function_exists( 'add_filter' ) ) {
 	}
 }
 
+if ( ! function_exists( 'apply_filters' ) ) {
+	function apply_filters( $hook, $value, ...$args ) {
+		// No filter callbacks registered in tests, so always return the default.
+		return $value;
+	}
+}
+
 // ── Action Scheduler stubs ────────────────────────────────────────────────────
 
 if ( ! function_exists( 'as_schedule_single_action' ) ) {
