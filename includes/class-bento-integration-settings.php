@@ -37,6 +37,7 @@ class Bento_Integration_Settings {
 		add_action( 'wp_ajax_bento_pmpro_start_sync',       [ __CLASS__, 'ajax_start_sync' ] );
 		add_action( 'wp_ajax_bento_pmpro_sync_status',      [ __CLASS__, 'ajax_sync_status' ] );
 		add_action( 'wp_ajax_bento_pmpro_test_event',       [ __CLASS__, 'ajax_test_event' ] );
+		add_action( 'wp_ajax_bento_pmpro_nudge_sync',      [ __CLASS__, 'ajax_nudge_sync' ] );
 		// Action Scheduler hooks — run in background, not via AJAX.
 		add_action( 'bento_pmpro_as_sync',  [ __CLASS__, 'run_scheduled_batch' ], 10, 1 );
 		add_action( 'bento_pmpro_as_event', [ __CLASS__, 'run_queued_event' ],    10, 1 );
@@ -579,6 +580,44 @@ class Bento_Integration_Settings {
 		$status = $all[ $type ] ?? [ 'status' => 'idle', 'message' => '' ];
 
 		wp_send_json_success( $status );
+	}
+
+	/**
+	 * AJAX handler: directly process the next sync batch when Action Scheduler
+	 * hasn't picked it up. Called by the JS poller after a brief wait.
+	 *
+	 * Runs one batch synchronously within the AJAX request, then returns the
+	 * updated status so the poller can continue as normal.
+	 */
+	public static function ajax_nudge_sync(): void {
+		check_ajax_referer( 'bento_pmpro_sync_batch' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'Unauthorized', 'bento-pmpro' ), 403 );
+			return;
+		}
+
+		$type = sanitize_key( $_POST['type'] ?? 'pmpro' );
+		$all  = get_option( self::SYNC_STATUS_OPTION, [] );
+		$info = $all[ $type ] ?? [];
+
+		if ( ( $info['status'] ?? '' ) !== 'running' ) {
+			wp_send_json_success( $info );
+			return;
+		}
+
+		// Run the batch directly.
+		self::run_scheduled_batch( [
+			'type'      => $type,
+			'offset'    => (int) ( $info['offset'] ?? 0 ),
+			'filter_id' => (int) ( $info['filter_id'] ?? 0 ),
+		] );
+
+		// Return the freshly updated status.
+		$all  = get_option( self::SYNC_STATUS_OPTION, [] );
+		$info = $all[ $type ] ?? [ 'status' => 'idle', 'message' => '' ];
+
+		wp_send_json_success( $info );
 	}
 
 	/**

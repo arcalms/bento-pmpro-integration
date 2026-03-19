@@ -208,17 +208,26 @@ jQuery( function ( $ ) {
 	//    (handles page refreshes mid-sync).
 	// -------------------------------------------------------------------------
 	var syncPollers = {}; // active setInterval handles, keyed by type
+	var syncPollCounts = {}; // number of polls per type, to detect stuck syncs
 
 	function startPolling( type, $btn, $status ) {
 		if ( syncPollers[ type ] ) {
 			return; // Already polling for this type.
 		}
 		$btn.prop( 'disabled', true );
+		syncPollCounts[ type ] = 0;
 		syncPollers[ type ] = setInterval( function () {
+			syncPollCounts[ type ]++;
+			// After 2 status polls with no progress, nudge the sync to run
+			// the batch directly via AJAX in case Action Scheduler is stuck.
+			var action = syncPollCounts[ type ] > 2
+				? 'bento_pmpro_nudge_sync'
+				: 'bento_pmpro_sync_status';
+
 			$.post(
 				bentoPmpro.ajaxUrl,
 				{
-					action:      'bento_pmpro_sync_status',
+					action:      action,
 					_ajax_nonce: bentoPmpro.syncNonce,
 					type:        type,
 				},
