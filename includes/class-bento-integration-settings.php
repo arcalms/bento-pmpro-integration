@@ -24,6 +24,12 @@ class Bento_Integration_Settings {
 	/** Transient key for caching the Bento fields list. */
 	const FIELDS_TRANSIENT = 'bento_pmpro_fields_cache';
 
+	/** Bento Fields API endpoint. */
+	const FIELDS_ENDPOINT = 'https://app.bentonow.com/api/v1/fetch/fields';
+
+	/** Maximum age (seconds) of a "running" sync before it is considered stale. */
+	const SYNC_STALE_SECONDS = 600; // 10 minutes
+
 	/**
 	 * Register hooks.
 	 */
@@ -270,7 +276,7 @@ class Bento_Integration_Settings {
 		/** This filter is documented in includes/class-bento-integration-settings.php */
 		$fields_endpoint = apply_filters(
 			'bento_pmpro_fields_endpoint',
-			'https://app.bentonow.com/api/v1/fetch/fields'
+			self::FIELDS_ENDPOINT
 		);
 
 		$response = wp_remote_get(
@@ -544,11 +550,12 @@ class Bento_Integration_Settings {
 		// Initialise status.
 		$all                  = get_option( self::SYNC_STATUS_OPTION, [] );
 		$all[ $type ]         = [
-			'status'    => 'running',
-			'total'     => 0,
-			'offset'    => 0,
-			'filter_id' => $filter_id,
-			'message'   => __( 'Queued — waiting for background processing to start…', 'bento-pmpro' ),
+			'status'     => 'running',
+			'total'      => 0,
+			'offset'     => 0,
+			'filter_id'  => $filter_id,
+			'started_at' => time(),
+			'message'    => __( 'Queued — waiting for background processing to start…', 'bento-pmpro' ),
 		];
 		update_option( self::SYNC_STATUS_OPTION, $all );
 
@@ -578,6 +585,17 @@ class Bento_Integration_Settings {
 		$type   = sanitize_key( $_POST['type'] ?? 'pmpro' );
 		$all    = get_option( self::SYNC_STATUS_OPTION, [] );
 		$status = $all[ $type ] ?? [ 'status' => 'idle', 'message' => '' ];
+
+		// Auto-expire syncs that have been running longer than SYNC_STALE_SECONDS.
+		if ( 'running' === ( $status['status'] ?? '' ) ) {
+			$started = (int) ( $status['started_at'] ?? 0 );
+			if ( $started > 0 && ( time() - $started ) > self::SYNC_STALE_SECONDS ) {
+				$status['status']  = 'done';
+				$status['message'] = __( 'Sync timed out — it may have stalled. Please try again.', 'bento-pmpro' );
+				$all[ $type ]      = $status;
+				update_option( self::SYNC_STATUS_OPTION, $all );
+			}
+		}
 
 		wp_send_json_success( $status );
 	}
@@ -649,12 +667,13 @@ class Bento_Integration_Settings {
 			: '';
 
 		$all[ $type ] = [
-			'status'    => $result['done'] ? 'done' : 'running',
-			'total'     => $result['total'],
-			'offset'    => $result['offset'],
-			'filter_id' => $filter_id,
-			'errors'    => $total_errors,
-			'message'   => $result['done']
+			'status'     => $result['done'] ? 'done' : 'running',
+			'total'      => $result['total'],
+			'offset'     => $result['offset'],
+			'filter_id'  => $filter_id,
+			'errors'     => $total_errors,
+			'started_at' => time(), // Reset so active syncs don't hit the stale timeout.
+			'message'    => $result['done']
 				/* translators: %1$d: total records synced, %2$s: optional error suffix */
 				? sprintf( __( '✓ Done — synced %1$d records%2$s.', 'bento-pmpro' ), $result['total'], $error_suffix )
 				/* translators: %1$d: records synced so far, %2$d: total records, %3$s: optional error suffix */
@@ -1037,7 +1056,7 @@ class Bento_Integration_Settings {
 		/** This filter is documented in includes/class-bento-integration-settings.php */
 		$fields_endpoint = apply_filters(
 			'bento_pmpro_fields_endpoint',
-			'https://app.bentonow.com/api/v1/fetch/fields'
+			self::FIELDS_ENDPOINT
 		);
 
 		$created = [];

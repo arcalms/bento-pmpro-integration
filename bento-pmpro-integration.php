@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Bento + PMPro Integration
  * Description:       Sends Bento events on PMPro membership and Sensei LMS course activities.
- * Version:           1.4.1
+ * Version:           1.4.2
  * Requires at least: 6.0
  * Requires PHP:      8.0
  * Text Domain:       bento-pmpro
@@ -17,7 +17,7 @@ if ( defined( 'BENTO_PMPRO_VERSION' ) ) {
 	return;
 }
 
-define( 'BENTO_PMPRO_VERSION', '1.4.1' );
+define( 'BENTO_PMPRO_VERSION', '1.4.2' );
 
 /**
  * Abort activation with a clear message if the Bento WordPress SDK is not active.
